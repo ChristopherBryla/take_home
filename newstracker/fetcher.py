@@ -8,9 +8,10 @@ class FetchError(Exception):
 
 
 def build_query(company):
-    """Search for the company name or any of its tickers (API limit: 100 chars)."""
-    name = f'"{company}"' if " " in company else company
-    return " OR ".join([name, *config.COMPANIES[company]])
+    """Search for the company name, its aliases or any of its tickers (API limit: 100 chars)."""
+    names = [company, *config.ALIASES.get(company, [])]
+    terms = [f'"{n}"' if " " in n else n for n in names] + config.COMPANIES[company]
+    return " OR ".join(terms)
 
 
 def fetch_articles(company):

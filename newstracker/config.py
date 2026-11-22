@@ -28,3 +28,11 @@ COMPANIES = {
     "Linde": ["LIN"],
     "Welltower": ["WELL"],
 }
+
+# Other names an article might use for a company. Matched case-insensitively.
+ALIASES = {
+    "Alphabet": ["Google"],
+    "ExxonMobil": ["Exxon"],
+    "Eli Lilly": ["Lilly"],
+    "NextEra Energy": ["NextEra"],
+}

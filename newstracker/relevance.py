@@ -1,18 +1,19 @@
 import re
 
-from newstracker.config import COMPANIES
+from newstracker.config import ALIASES, COMPANIES
 
 
 def mentions_company(article, company):
-    """True if the title or description names the company or one of its tickers.
+    """True if the title or description names the company, an alias or a ticker.
 
     Names match case-insensitively. Tickers must be uppercase, so words like
     "well", "ge" and "lin" don't count as Welltower, GE Aerospace or Linde.
     """
     text = f"{article.get('title') or ''} {article.get('description') or ''}"
 
-    if re.search(rf"\b{re.escape(company)}\b", text, re.IGNORECASE):
-        return True
+    for name in [company, *ALIASES.get(company, [])]:
+        if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):
+            return True
     return any(re.search(rf"\b{re.escape(t)}\b", text) for t in COMPANIES[company])
 
 

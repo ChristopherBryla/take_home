@@ -32,5 +32,13 @@ def test_name_inside_a_longer_word_does_not_match():
     assert not mentions_company(article("Amazonian rainforest fires"), "Amazon")
 
 
+def test_aliases_match_their_company():
+    assert mentions_company(article("Google unveils a new chip"), "Alphabet")
+    assert mentions_company(article("Exxon raises its dividend"), "ExxonMobil")
+    assert mentions_company(article("Lilly's obesity drug wins approval"), "Eli Lilly")
+    assert mentions_company(article("NextEra signs a solar deal"), "NextEra Energy")
+    assert not mentions_company(article("Google unveils a new chip"), "Amazon")
+
+
 def test_missing_text_does_not_crash():
     assert not mentions_company({"title": None, "description": None}, "Amazon")

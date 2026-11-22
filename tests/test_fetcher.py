@@ -21,7 +21,10 @@ def test_queries_fit_the_api_limit():
 
 def test_query_format():
     assert fetcher.build_query("Amazon") == "Amazon OR AMZN"
-    assert fetcher.build_query("Alphabet") == "Alphabet OR GOOGL OR GOOG"
+    assert fetcher.build_query("Alphabet") == "Alphabet OR Google OR GOOGL OR GOOG"
+    assert fetcher.build_query("ExxonMobil") == "ExxonMobil OR Exxon OR XOM"
+    assert fetcher.build_query("Eli Lilly") == '"Eli Lilly" OR Lilly OR LLY'
+    assert fetcher.build_query("NextEra Energy") == '"NextEra Energy" OR NextEra OR NEE'
     assert fetcher.build_query("Berkshire Hathaway") == '"Berkshire Hathaway" OR BRK.B'
 
 
