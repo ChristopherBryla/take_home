@@ -27,9 +27,19 @@ def test_saves_real_response(conn, response):
 
     assert new == len(articles)
     assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == len(articles)
-    assert conn.execute(
-        "SELECT COUNT(*) FROM article_companies WHERE company = 'Amazon'"
-    ).fetchone()[0] == len(articles)
+
+
+def test_only_articles_mentioning_amazon_are_linked(conn, response):
+    db.save_articles(conn, "Amazon", response["results"])
+
+    linked = conn.execute(
+        "SELECT a.title FROM article_companies ac JOIN articles a USING (article_id) "
+        "WHERE ac.company = 'Amazon'"
+    ).fetchall()
+
+    assert len(linked) == 2
+    assert any("earbuds" in r["title"] for r in linked)
+    assert any("Hanes" in r["title"] for r in linked)
 
 
 def test_saving_twice_adds_no_duplicates(conn, response):
@@ -75,6 +85,7 @@ def test_paid_plan_placeholders_become_null(conn, response):
 
 
 def test_same_article_can_belong_to_two_companies(conn, response):
+    # The earbuds article says "on sale at Amazon, Best Buy, and Walmart".
     article = response["results"][0]
 
     db.save_articles(conn, "Amazon", [article])

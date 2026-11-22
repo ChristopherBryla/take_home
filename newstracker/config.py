@@ -9,6 +9,11 @@ NEWSDATA_URL = "https://newsdata.io/api/1/latest"
 
 DB_PATH = "news.db"
 
+# Free plan: 200 credits/day, 1 credit per request. 96 runs/day x 2 companies = 192.
+CREDITS_PER_DAY = 200
+COMPANIES_PER_RUN = 2
+POLL_SECONDS = 15 * 60
+
 # name -> tickers. Alphabet has two share classes.
 COMPANIES = {
     "Nvidia": ["NVDA"],

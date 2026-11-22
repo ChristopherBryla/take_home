@@ -2,6 +2,7 @@ import json
 import sqlite3
 
 from newstracker.config import DB_PATH
+from newstracker.relevance import mentions_company
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS articles (
@@ -57,7 +58,10 @@ def _clean(value):
 
 
 def save_articles(conn, company, articles):
-    """Store articles for a company; return how many were new to the database."""
+    """Store every article, but link it to the company only if it mentions it.
+
+    Returns how many articles were new to the database.
+    """
     new = 0
     for a in articles:
         cur = conn.execute(
@@ -82,10 +86,11 @@ def save_articles(conn, company, articles):
             ),
         )
         new += cur.rowcount
-        conn.execute(
-            "INSERT OR IGNORE INTO article_companies (article_id, company) VALUES (?, ?)",
-            (a["article_id"], company),
-        )
+        if mentions_company(a, company):
+            conn.execute(
+                "INSERT OR IGNORE INTO article_companies (article_id, company) VALUES (?, ?)",
+                (a["article_id"], company),
+            )
     conn.commit()
     return new
 
