@@ -7,7 +7,7 @@ from newstracker.relevance import find_company
 
 def _articles(conn, company):
     return conn.execute(
-        """SELECT a.article_id, a.title, a.pub_date, a.source_name, a.sentiment, a.raw_json
+        """SELECT a.article_id, a.title, a.description, a.pub_date, a.source_name, a.sentiment, a.raw_json
            FROM article_companies ac JOIN articles a USING (article_id)
            WHERE ac.company = ? ORDER BY a.pub_date DESC""",
         (company,),
@@ -32,6 +32,11 @@ def _stories(rows):
         else:
             stories[key] = [row, 1]
     return [tuple(s) for s in stories.values()]
+
+
+def company_stories(conn, company):
+    """The company's stories, newest first, as (row, copies) pairs."""
+    return _stories(_articles(conn, company))
 
 
 def summarize(conn, company, max_headlines=5):

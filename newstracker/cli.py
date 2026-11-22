@@ -3,7 +3,7 @@ import sqlite3
 import sys
 import time
 
-from newstracker import config, db, fetcher
+from newstracker import config, db, fetcher, llm
 from newstracker.summarize import answer
 
 
@@ -21,6 +21,11 @@ def main(argv=None, fetch=fetcher.fetch_articles):
     p_query.add_argument("file")
     p_ask = sub.add_parser("ask", help="ask what the news has said about a company")
     p_ask.add_argument("question")
+    p_ask.add_argument(
+        "--llm",
+        action="store_true",
+        help="answer with OpenAI instead (needs OPENAI_API_KEY; sends article text to OpenAI)",
+    )
     args = parser.parse_args(argv)
 
     conn = db.connect(args.db)
@@ -48,7 +53,14 @@ def main(argv=None, fetch=fetcher.fetch_articles):
         with open(args.file, encoding="utf-8") as f:
             print_table(conn.execute(f.read()))
     elif args.command == "ask":
-        print(answer(conn, args.question))
+        if args.llm:
+            try:
+                print(llm.answer_with_llm(conn, args.question))
+            except llm.LLMError as e:
+                print(f"Language model unavailable ({e}). Showing the rule-based summary instead.\n")
+                print(answer(conn, args.question))
+        else:
+            print(answer(conn, args.question))
 
 
 def print_table(cursor, max_width=70):

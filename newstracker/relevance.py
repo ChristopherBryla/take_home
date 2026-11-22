@@ -20,13 +20,16 @@ def mentions_company(article, company):
     return any(re.search(rf"\b{re.escape(t)}\b", text) for t in COMPANIES[company])
 
 
-def find_company(text):
-    """Return the company a question or argument refers to, or None."""
-    for company in COMPANIES:
-        if mentions_company({"title": text}, company):
-            return company
+def find_companies(text):
+    """Return every company a question or argument refers to, in config order."""
+    found = [c for c in COMPANIES if mentions_company({"title": text}, c)]
+    if found:
+        return found
     bare = text.strip().upper()
-    for company, tickers in COMPANIES.items():
-        if bare in tickers:
-            return company
-    return None
+    return [c for c, tickers in COMPANIES.items() if bare in tickers]
+
+
+def find_company(text):
+    """Return the first company a question or argument refers to, or None."""
+    found = find_companies(text)
+    return found[0] if found else None

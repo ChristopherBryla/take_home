@@ -18,6 +18,7 @@ copy .env.example .env      # then put your NewsData.io key in .env
 python -m newstracker fetch                                   # one tick now (2 credits)
 python -m newstracker run                                     # a tick every 15 minutes
 python -m newstracker ask "What has the news said about AMZN?"
+python -m newstracker ask --llm "Did Amazon announce layoffs?"   # optional: answer with OpenAI
 python -m newstracker retag                                   # rebuild company tags from stored articles
 python -m pytest                                              # tests (no API calls, no credits)
 ```
@@ -29,7 +30,7 @@ Data is stored in `news.db` (override with `--db path`).
 1. **Fetch.** Every 15 minutes the app runs two search queries, each covering about half of the companies (the API caps a query at 100 characters, and one query cannot fit all 11). Names, aliases and as many tickers as fit are included.
 2. **Store.** Every returned article goes into the `articles` table. The complete API object is kept as JSON in `raw_json`, and the fields we query on (title, description, date, source, sentiment, ...) are also stored as columns. Articles are de-duplicated on `article_id`.
 3. **Tag.** After each fetch, the whole database is re-scanned and every article is linked to every company it mentions (`article_companies`). An article found by one query can therefore count for any company.
-4. **Answer.** `ask` finds the company in the question (name, alias or ticker), then summarizes its linked articles: article count and date range, sentiment tally, top topics and sources, and the latest headlines.
+4. **Answer.** `ask` finds the company in the question (name, alias or ticker), then summarizes its linked articles: article count and date range, sentiment tally, top topics and sources, and the latest headlines. This default answer is rule-based, free, and needs no extra key. With `--llm`, the question and the stored stories for the companies it names are sent to an OpenAI model, which answers only from those articles (see below).
 
 Tables: `articles`, `article_companies` (article-to-company links), `fetch_log` (one row per API call: query, status, total results, new articles).
 
@@ -40,7 +41,8 @@ Tables: `articles`, `article_companies` (article-to-company links), `fetch_log` 
 - **Tag the whole database, not just the searched company.** Links are rebuilt from the stored text and the current matching rules, so changing an alias and running `retag` fixes old data.
 - **What counts as "about a company".** An article is linked only if its title or description names the company, a known alias (Google, Exxon, Lilly, NextEra) or its ticker. Tickers must be uppercase whole words, so "well", "ge" and "lin" do not match Welltower, GE Aerospace or Linde. The boilerplate "Google News" is ignored. Articles that match nothing are still stored.
 - **Sentiment comes from the API.** The free plan includes a sentiment label and scores, so no separate model is used.
-- **Summary is rule-based.** The free plan hides article `content` (and `ai_summary`), leaving only titles and descriptions, so the summary is a roll-up of those fields rather than a model-written paragraph. Fields locked on the free plan are stored as NULL.
+- **Summary is rule-based by default.** The free plan hides article `content` (and `ai_summary`), leaving only titles and descriptions, so the default summary is a roll-up of those fields rather than a model-written paragraph. Fields locked on the free plan are stored as NULL.
+- **Language model is optional (`ask --llm`).** The rule-based answer only identifies the company in a question, so it cannot answer things like "Did Amazon announce layoffs?". With `--llm` and an `OPENAI_API_KEY` in `.env`, the stored stories (title, description, date, source, sentiment; one entry per distinct story, newest 40 per company) are sent to OpenAI's `gpt-6-luna` model with instructions to answer only from them and to say when the data doesn't cover the question. It is opt-in because it costs money and sends article text to a third party. If the key is missing or the call fails, the rule-based summary is printed instead. The tests use a fake HTTP client, so the live call is untested until a key is added.
 - **SQLite.** One file, no setup, enough for this volume.
 
 ## Steps followed

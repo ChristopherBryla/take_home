@@ -7,6 +7,11 @@ load_dotenv()
 NEWSDATA_API_KEY = os.getenv("NEWSDATA_API_KEY")
 NEWSDATA_URL = "https://newsdata.io/api/1/latest"
 
+# Optional: only used by `ask --llm`.
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+OPENAI_MODEL = "gpt-6-luna"
+
 DB_PATH = "news.db"
 
 # Free plan: 200 credits/day, 1 credit per request. 96 runs/day x 2 queries = 192.
