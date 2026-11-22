@@ -39,23 +39,31 @@ def fetch_articles(query):
     # Not raise_for_status(): its message contains the URL, which contains the key.
     if response.status_code != 200:
         raise FetchError(f"HTTP {response.status_code}")
-    data = response.json()
-    if data.get("status") != "success":
-        raise FetchError(f"API status: {data.get('status')}")
+    try:
+        data = response.json()
+    except ValueError:
+        raise FetchError("response was not JSON") from None
+    if not isinstance(data, dict) or data.get("status") != "success":
+        status = data.get("status") if isinstance(data, dict) else "unexpected body"
+        raise FetchError(f"API status: {status}")
     return data
 
 
 def fetch_and_store(conn, query, fetch=fetch_articles):
     """Run one query, save the articles, re-tag the whole database and log the call.
 
-    Returns the number of new articles.
+    Returns the number of new articles, or None if the request failed.
     """
     try:
         data = fetch(query)
-    except (FetchError, requests.RequestException) as e:
+    except FetchError as e:
         # A failed request may still have used a credit, so it is logged and counted.
-        db.log_fetch(conn, query, f"error: {type(e).__name__}: {e}", None, 0)
-        return 0
+        db.log_fetch(conn, query, f"error: {e}", None, 0)
+        return None
+    except requests.RequestException as e:
+        # Only the type: the message contains the request URL, which contains the key.
+        db.log_fetch(conn, query, f"error: {type(e).__name__}", None, 0)
+        return None
     new = db.save_articles(conn, data["results"])
     db.tag_articles(conn)
     db.log_fetch(conn, query, "ok", data.get("totalResults"), new)

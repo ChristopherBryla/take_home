@@ -1,4 +1,5 @@
 import argparse
+import sqlite3
 import sys
 import time
 
@@ -27,7 +28,14 @@ def main(argv=None, fetch=fetcher.fetch_articles):
     elif args.command == "run":
         try:
             while True:
-                print_tick(fetcher.run_once(conn, fetch))
+                try:
+                    print_tick(fetcher.run_once(conn, fetch))
+                except sqlite3.Error as e:
+                    conn.rollback()
+                    print(f"{stamp()} tick failed: {type(e).__name__}: {e}", flush=True)
+                except Exception as e:
+                    # Keep polling; only the type is printed since a message could contain the key.
+                    print(f"{stamp()} tick failed: {type(e).__name__}", flush=True)
                 time.sleep(config.POLL_SECONDS)
         except KeyboardInterrupt:
             print("Stopped.")
@@ -37,8 +45,13 @@ def main(argv=None, fetch=fetcher.fetch_articles):
         print(answer(conn, args.question))
 
 
+def stamp():
+    return time.strftime("[%Y-%m-%d %H:%M:%S]")
+
+
 def print_tick(results):
     if not results:
-        print("Daily credit limit reached; nothing fetched.", flush=True)
+        print(f"{stamp()} daily credit limit reached; nothing fetched.", flush=True)
     for query, new in results:
-        print(f"{new} new articles stored for: {query}", flush=True)
+        outcome = "request failed (see fetch_log)" if new is None else f"{new} new articles"
+        print(f"{stamp()} {outcome} for: {query}", flush=True)

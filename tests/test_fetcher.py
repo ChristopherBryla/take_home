@@ -89,9 +89,33 @@ def test_failed_request_is_logged_and_counts_as_a_credit(conn):
     def failing(query):
         raise fetcher.FetchError("HTTP 429")
 
-    assert fetcher.fetch_and_store(conn, "Amazon OR AMZN", failing) == 0
+    assert fetcher.fetch_and_store(conn, "Amazon OR AMZN", failing) is None
 
     row = conn.execute("SELECT query, status FROM fetch_log").fetchone()
     assert row["query"] == "Amazon OR AMZN"
-    assert row["status"] == "error: FetchError: HTTP 429"
+    assert row["status"] == "error: HTTP 429"
     assert fetcher.credits_used_today(conn) == 1
+
+
+def test_network_error_log_does_not_contain_the_key(conn):
+    def unreachable(query):
+        raise fetcher.requests.ConnectionError("url: /api/1/latest?apikey=secret-key&q=x")
+
+    fetcher.fetch_and_store(conn, "Amazon OR AMZN", unreachable)
+
+    status = conn.execute("SELECT status FROM fetch_log").fetchone()["status"]
+    assert status == "error: ConnectionError"
+
+
+def test_non_json_response_is_a_fetch_error(monkeypatch):
+    class NotJson:
+        status_code = 200
+
+        def json(self):
+            raise ValueError("no json")
+
+    monkeypatch.setattr(config, "NEWSDATA_API_KEY", "secret-key")
+    monkeypatch.setattr(fetcher.requests, "get", lambda *a, **k: NotJson())
+
+    with pytest.raises(fetcher.FetchError, match="not JSON"):
+        fetcher.fetch_articles("Amazon OR AMZN")

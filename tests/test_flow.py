@@ -36,7 +36,7 @@ def test_fetch_store_and_ask(tmp_path, capsys, fake_fetch, response):
     # 1. One tick: both queries hit the "API" and land in the database.
     main(["--db", path, "fetch"], fetch=fake_fetch)
     assert len(fake_fetch.calls) == 2
-    assert "10 new articles stored" in capsys.readouterr().out
+    assert "10 new articles for:" in capsys.readouterr().out
 
     conn = db.connect(path)
     assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10
@@ -71,7 +71,7 @@ def test_fetching_again_stores_nothing_new(tmp_path, capsys, fake_fetch):
     capsys.readouterr()
     main(["--db", path, "fetch"], fetch=fake_fetch)
 
-    assert capsys.readouterr().out.count("0 new articles stored") == 2
+    assert capsys.readouterr().out.count("0 new articles for:") == 2
     assert db.connect(path).execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10
 
 
