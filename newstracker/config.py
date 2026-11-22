@@ -9,10 +9,17 @@ NEWSDATA_URL = "https://newsdata.io/api/1/latest"
 
 DB_PATH = "news.db"
 
-# Free plan: 200 credits/day, 1 credit per request. 96 runs/day x 2 companies = 192.
+# Free plan: 200 credits/day, 1 credit per request. 96 runs/day x 2 queries = 192.
 CREDITS_PER_DAY = 200
-COMPANIES_PER_RUN = 2
 POLL_SECONDS = 15 * 60
+
+# The API caps a search query at 100 characters, so the 11 companies are split
+# across two queries that both run on every 15-minute tick.
+MAX_QUERY_LENGTH = 100
+QUERY_GROUPS = [
+    ["Amazon", "Nvidia", "Alphabet", "Eli Lilly", "Berkshire Hathaway"],
+    ["Walmart", "ExxonMobil", "NextEra Energy", "Welltower", "Linde", "GE Aerospace"],
+]
 
 # name -> tickers. Alphabet has two share classes.
 COMPANIES = {

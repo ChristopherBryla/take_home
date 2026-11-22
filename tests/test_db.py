@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from newstracker import db
+from newstracker import config, db
 
 SAMPLE = Path(__file__).parent.parent / "sample_data" / "real_amzn.json"
 
@@ -23,14 +23,15 @@ def conn(tmp_path):
 def test_saves_real_response(conn, response):
     articles = response["results"]
 
-    new = db.save_articles(conn, "Amazon", articles)
+    new = db.save_articles(conn, articles)
 
     assert new == len(articles)
     assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == len(articles)
 
 
 def test_only_articles_mentioning_amazon_are_linked(conn, response):
-    db.save_articles(conn, "Amazon", response["results"])
+    db.save_articles(conn, response["results"])
+    db.tag_articles(conn)
 
     linked = conn.execute(
         "SELECT a.title FROM article_companies ac JOIN articles a USING (article_id) "
@@ -43,14 +44,14 @@ def test_only_articles_mentioning_amazon_are_linked(conn, response):
 
 
 def test_saving_twice_adds_no_duplicates(conn, response):
-    db.save_articles(conn, "Amazon", response["results"])
+    db.save_articles(conn, response["results"])
 
-    assert db.save_articles(conn, "Amazon", response["results"]) == 0
+    assert db.save_articles(conn, response["results"]) == 0
     assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == len(response["results"])
 
 
 def test_raw_json_keeps_every_field(conn, response):
-    db.save_articles(conn, "Amazon", response["results"])
+    db.save_articles(conn, response["results"])
 
     original = response["results"][0]
     row = conn.execute(
@@ -61,7 +62,7 @@ def test_raw_json_keeps_every_field(conn, response):
 
 
 def test_columns_match_the_response(conn, response):
-    db.save_articles(conn, "Amazon", response["results"])
+    db.save_articles(conn, response["results"])
 
     original = response["results"][0]
     row = conn.execute(
@@ -77,19 +78,35 @@ def test_columns_match_the_response(conn, response):
 
 
 def test_paid_plan_placeholders_become_null(conn, response):
-    db.save_articles(conn, "Amazon", response["results"])
+    db.save_articles(conn, response["results"])
 
     rows = conn.execute("SELECT content FROM articles").fetchall()
 
     assert all(r["content"] is None for r in rows)
 
 
-def test_same_article_can_belong_to_two_companies(conn, response):
+def test_tagging_checks_every_company_not_just_the_one_searched_for(conn, response):
     # The earbuds article says "on sale at Amazon, Best Buy, and Walmart".
-    article = response["results"][0]
+    earbuds = response["results"][0]
 
-    db.save_articles(conn, "Amazon", [article])
-    db.save_articles(conn, "Walmart", [article])
+    db.save_articles(conn, [earbuds])
+    db.tag_articles(conn)
 
-    assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 1
-    assert conn.execute("SELECT COUNT(*) FROM article_companies").fetchone()[0] == 2
+    companies = {r["company"] for r in conn.execute("SELECT company FROM article_companies")}
+    assert companies == {"Amazon", "Walmart"}
+
+
+def test_tagging_twice_gives_the_same_links(conn, response):
+    db.save_articles(conn, response["results"])
+
+    assert db.tag_articles(conn) == db.tag_articles(conn)
+
+
+def test_retagging_picks_up_a_new_company(conn, response, monkeypatch):
+    db.save_articles(conn, response["results"])
+    before = db.tag_articles(conn)
+
+    # The earbuds description mentions Soundcore.
+    monkeypatch.setitem(config.COMPANIES, "Soundcore", [])
+
+    assert db.tag_articles(conn) == before + 1

@@ -1,7 +1,7 @@
 import json
 import sqlite3
 
-from newstracker.config import DB_PATH
+from newstracker.config import COMPANIES, DB_PATH
 from newstracker.relevance import mentions_company
 
 SCHEMA = """
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS article_companies (
 
 CREATE TABLE IF NOT EXISTS fetch_log (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    company       TEXT NOT NULL,
+    query         TEXT NOT NULL,
     fetched_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     status        TEXT,
     total_results INTEGER,
@@ -57,11 +57,8 @@ def _clean(value):
     return value
 
 
-def save_articles(conn, company, articles):
-    """Store every article, but link it to the company only if it mentions it.
-
-    Returns how many articles were new to the database.
-    """
+def save_articles(conn, articles):
+    """Store articles; return how many were new to the database."""
     new = 0
     for a in articles:
         cur = conn.execute(
@@ -86,18 +83,32 @@ def save_articles(conn, company, articles):
             ),
         )
         new += cur.rowcount
-        if mentions_company(a, company):
-            conn.execute(
-                "INSERT OR IGNORE INTO article_companies (article_id, company) VALUES (?, ?)",
-                (a["article_id"], company),
-            )
     conn.commit()
     return new
 
 
-def log_fetch(conn, company, status, total_results, new_articles):
+def tag_articles(conn):
+    """Rebuild the article-company links by scanning every stored article.
+
+    Links depend only on the stored text and the current matching rules, so this
+    is safe to re-run (for example after adding an alias). Returns the link count.
+    """
+    conn.execute("DELETE FROM article_companies")
+    for row in conn.execute("SELECT article_id, title, description FROM articles").fetchall():
+        article = dict(row)
+        for company in COMPANIES:
+            if mentions_company(article, company):
+                conn.execute(
+                    "INSERT INTO article_companies (article_id, company) VALUES (?, ?)",
+                    (row["article_id"], company),
+                )
+    conn.commit()
+    return conn.execute("SELECT COUNT(*) FROM article_companies").fetchone()[0]
+
+
+def log_fetch(conn, query, status, total_results, new_articles):
     conn.execute(
-        "INSERT INTO fetch_log (company, status, total_results, new_articles) VALUES (?, ?, ?, ?)",
-        (company, status, total_results, new_articles),
+        "INSERT INTO fetch_log (query, status, total_results, new_articles) VALUES (?, ?, ?, ?)",
+        (query, status, total_results, new_articles),
     )
     conn.commit()

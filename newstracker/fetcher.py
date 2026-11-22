@@ -7,14 +7,27 @@ class FetchError(Exception):
     pass
 
 
-def build_query(company):
-    """Search for the company name, its aliases or any of its tickers (API limit: 100 chars)."""
-    names = [company, *config.ALIASES.get(company, [])]
-    terms = [f'"{n}"' if " " in n else n for n in names] + config.COMPANIES[company]
+def build_query(companies):
+    """Search terms for a group of companies, within the API's 100-character limit.
+
+    Names and aliases always go in; tickers are added while they still fit.
+    """
+    names = []
+    for company in companies:
+        names += [company, *config.ALIASES.get(company, [])]
+    # "Eli Lilly" is redundant next to "Lilly": the search matches either word.
+    words = {n: set(n.lower().split()) for n in names}
+    names = [n for n in names if not any(words[o] < words[n] for o in names)]
+
+    terms = [f'"{n}"' if " " in n else n for n in names]
+    for company in companies:
+        for ticker in config.COMPANIES[company]:
+            if len(" OR ".join(terms + [ticker])) <= config.MAX_QUERY_LENGTH:
+                terms.append(ticker)
     return " OR ".join(terms)
 
 
-def fetch_articles(company):
+def fetch_articles(query):
     """Make one API request (1 credit) and return the parsed response."""
     if not config.NEWSDATA_API_KEY:
         raise FetchError("NEWSDATA_API_KEY is not set")
@@ -36,16 +49,20 @@ def fetch_articles(company):
     return data
 
 
-def fetch_and_store(conn, company, fetch=fetch_articles):
-    """Fetch one company, save the articles and log the call. Returns new article count."""
+def fetch_and_store(conn, query, fetch=fetch_articles):
+    """Run one query, save the articles, re-tag the whole database and log the call.
+
+    Returns the number of new articles.
+    """
     try:
-        data = fetch(company)
+        data = fetch(query)
     except (FetchError, requests.RequestException) as e:
         # A failed request may still have used a credit, so it is logged and counted.
-        db.log_fetch(conn, company, f"error: {type(e).__name__}: {e}", None, 0)
+        db.log_fetch(conn, query, f"error: {type(e).__name__}: {e}", None, 0)
         return 0
-    new = db.save_articles(conn, company, data["results"])
-    db.log_fetch(conn, company, "ok", data.get("totalResults"), new)
+    new = db.save_articles(conn, data["results"])
+    db.tag_articles(conn)
+    db.log_fetch(conn, query, "ok", data.get("totalResults"), new)
     return new
 
 
@@ -56,24 +73,13 @@ def credits_used_today(conn):
     return row[0]
 
 
-def companies_to_fetch(conn, count):
-    """The companies fetched longest ago (never-fetched first, in config order)."""
-    last = {
-        r["company"]: r["last"]
-        for r in conn.execute(
-            "SELECT company, MAX(fetched_at) AS last FROM fetch_log GROUP BY company"
-        )
-    }
-    return sorted(config.COMPANIES, key=lambda c: last.get(c) or "")[:count]
-
-
-def run_once(conn, fetch=fetch_articles, per_run=None, daily_limit=None):
-    """One 15-minute tick: fetch the next few companies, stopping at the daily budget."""
-    per_run = per_run or config.COMPANIES_PER_RUN
+def run_once(conn, fetch=fetch_articles, daily_limit=None):
+    """One 15-minute tick: run every query group, stopping at the daily budget."""
     daily_limit = daily_limit or config.CREDITS_PER_DAY
     results = []
-    for company in companies_to_fetch(conn, per_run):
+    for group in config.QUERY_GROUPS:
         if credits_used_today(conn) >= daily_limit:
             break
-        results.append((company, fetch_and_store(conn, company, fetch)))
+        query = build_query(group)
+        results.append((query, fetch_and_store(conn, query, fetch)))
     return results

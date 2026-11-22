@@ -10,48 +10,62 @@ def conn(tmp_path):
     conn.close()
 
 
-def empty_fetch(company):
+def empty_fetch(query):
     return {"status": "success", "totalResults": 0, "results": []}
 
 
 def test_queries_fit_the_api_limit():
-    for company in config.COMPANIES:
-        assert len(fetcher.build_query(company)) <= 100
+    for group in config.QUERY_GROUPS:
+        assert len(fetcher.build_query(group)) <= config.MAX_QUERY_LENGTH
 
 
-def test_query_format():
-    assert fetcher.build_query("Amazon") == "Amazon OR AMZN"
-    assert fetcher.build_query("Alphabet") == "Alphabet OR Google OR GOOGL OR GOOG"
-    assert fetcher.build_query("ExxonMobil") == "ExxonMobil OR Exxon OR XOM"
-    assert fetcher.build_query("Eli Lilly") == '"Eli Lilly" OR Lilly OR LLY'
-    assert fetcher.build_query("NextEra Energy") == '"NextEra Energy" OR NextEra OR NEE'
-    assert fetcher.build_query("Berkshire Hathaway") == '"Berkshire Hathaway" OR BRK.B'
+def test_every_company_is_in_exactly_one_query_group():
+    grouped = [c for group in config.QUERY_GROUPS for c in group]
+
+    assert sorted(grouped) == sorted(config.COMPANIES)
 
 
-def test_rotation_visits_every_company_before_repeating(conn):
-    names = list(config.COMPANIES)
-    seen = []
-    for _ in range(6):  # 6 runs x 2 companies = 12 >= 11
-        seen += [c for c, _ in fetcher.run_once(conn, empty_fetch)]
+def test_query_includes_names_aliases_and_tickers():
+    query = fetcher.build_query(["Amazon", "Alphabet", "Berkshire Hathaway"])
 
-    assert seen[:11] == names
-    assert seen[11] == names[0]
+    assert query == 'Amazon OR Alphabet OR Google OR "Berkshire Hathaway" OR AMZN OR GOOGL OR GOOG OR BRK.B'
+
+
+def test_query_drops_names_that_a_shorter_alias_already_covers():
+    assert fetcher.build_query(["Eli Lilly"]) == "Lilly OR LLY"
+    assert fetcher.build_query(["NextEra Energy"]) == "NextEra OR NEE"
+
+
+def test_query_keeps_exxonmobil_next_to_exxon():
+    # Search matches whole words, so "Exxon" alone would miss "ExxonMobil".
+    assert fetcher.build_query(["ExxonMobil"]) == "ExxonMobil OR Exxon OR XOM"
+
+
+def test_a_tick_runs_every_query_group(conn):
+    queries = []
+
+    def fetch(query):
+        queries.append(query)
+        return empty_fetch(query)
+
+    fetcher.run_once(conn, fetch)
+
+    assert queries == [fetcher.build_query(g) for g in config.QUERY_GROUPS]
+    assert fetcher.credits_used_today(conn) == len(config.QUERY_GROUPS)
 
 
 def test_daily_limit_stops_fetching(conn):
-    results = fetcher.run_once(conn, empty_fetch, per_run=5, daily_limit=3)
-
-    assert len(results) == 3
-    assert fetcher.credits_used_today(conn) == 3
-    assert fetcher.run_once(conn, empty_fetch, per_run=5, daily_limit=3) == []
+    assert len(fetcher.run_once(conn, empty_fetch, daily_limit=1)) == 1
+    assert fetcher.run_once(conn, empty_fetch, daily_limit=1) == []
 
 
 def test_failed_request_is_logged_and_counts_as_a_credit(conn):
-    def failing(company):
+    def failing(query):
         raise fetcher.FetchError("HTTP 429")
 
-    assert fetcher.fetch_and_store(conn, "Amazon", failing) == 0
+    assert fetcher.fetch_and_store(conn, "Amazon OR AMZN", failing) == 0
 
-    row = conn.execute("SELECT status FROM fetch_log").fetchone()
+    row = conn.execute("SELECT query, status FROM fetch_log").fetchone()
+    assert row["query"] == "Amazon OR AMZN"
     assert row["status"] == "error: FetchError: HTTP 429"
     assert fetcher.credits_used_today(conn) == 1
