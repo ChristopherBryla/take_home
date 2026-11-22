@@ -3,6 +3,7 @@
 Run with output visible:  python -m pytest tests/test_flow.py -s
 """
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -51,7 +52,7 @@ def test_fetch_store_and_ask(tmp_path, capsys, fake_fetch, response):
     out = capsys.readouterr().out
     print("\n" + out)
 
-    assert "Amazon: 2 articles collected" in out
+    assert "Amazon: 2 stories collected" in out
     assert "Sentiment:" in out
     assert "Hanes" in out
     # Articles that never mention Amazon are stored but not part of the answer.
@@ -60,7 +61,7 @@ def test_fetch_store_and_ask(tmp_path, capsys, fake_fetch, response):
     # 3. The whole database is checked: this Amazon-query result also mentions Walmart.
     main(["--db", path, "ask", "What has the news said about WMT?"])
     out = capsys.readouterr().out
-    assert "Walmart: 1 article collected" in out
+    assert "Walmart: 1 story collected" in out
     assert "earbuds" in out
 
 
@@ -72,6 +73,26 @@ def test_fetching_again_stores_nothing_new(tmp_path, capsys, fake_fetch):
     main(["--db", path, "fetch"], fetch=fake_fetch)
 
     assert capsys.readouterr().out.count("0 new articles for:") == 2
+    assert db.connect(path).execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10
+
+
+def test_query_command_prints_a_table_and_cannot_write(tmp_path, capsys, fake_fetch):
+    path = str(tmp_path / "flow.db")
+    main(["--db", path, "fetch"], fetch=fake_fetch)
+    capsys.readouterr()
+
+    select = tmp_path / "q.sql"
+    select.write_text("SELECT company, COUNT(*) AS articles FROM article_companies GROUP BY company;")
+    main(["--db", path, "query", str(select)])
+    out = capsys.readouterr().out
+    assert out.splitlines()[0].split() == ["company", "articles"]
+    assert "Walmart" in out
+    assert "(2 rows)" in out
+
+    delete = tmp_path / "d.sql"
+    delete.write_text("DELETE FROM articles;")
+    with pytest.raises(sqlite3.OperationalError):
+        main(["--db", path, "query", str(delete)])
     assert db.connect(path).execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10
 
 

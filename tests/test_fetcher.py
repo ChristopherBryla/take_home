@@ -41,17 +41,29 @@ def test_query_keeps_exxonmobil_next_to_exxon():
     assert fetcher.build_query(["ExxonMobil"]) == "ExxonMobil OR Exxon OR XOM"
 
 
-def test_a_tick_runs_every_query_group(conn):
+def test_a_tick_runs_the_every_tick_query_plus_one_rotating_query(conn):
     queries = []
 
     def fetch(query):
         queries.append(query)
         return empty_fetch(query)
 
-    fetcher.run_once(conn, fetch)
+    rotating = config.ROTATING_GROUPS
+    for _ in range(2 * len(rotating)):
+        fetcher.run_once(conn, fetch)
 
-    assert queries == [fetcher.build_query(g) for g in config.QUERY_GROUPS]
-    assert fetcher.credits_used_today(conn) == len(config.QUERY_GROUPS)
+    every_tick = [fetcher.build_query(g) for g in config.EVERY_TICK_GROUPS]
+    expected = []
+    for i in range(2 * len(rotating)):
+        expected += [*every_tick, fetcher.build_query(rotating[i % len(rotating)])]
+    assert queries == expected
+
+
+def test_ticks_fit_the_daily_credit_budget():
+    calls_per_tick = len(config.EVERY_TICK_GROUPS) + 1
+    ticks_per_day = 24 * 60 * 60 // config.POLL_SECONDS
+
+    assert calls_per_tick * ticks_per_day <= config.CREDITS_PER_DAY
 
 
 def test_daily_limit_stops_fetching(conn):

@@ -7,7 +7,7 @@ from newstracker.relevance import find_company
 
 def _articles(conn, company):
     return conn.execute(
-        """SELECT a.title, a.pub_date, a.source_name, a.sentiment, a.raw_json
+        """SELECT a.article_id, a.title, a.pub_date, a.source_name, a.sentiment, a.raw_json
            FROM article_companies ac JOIN articles a USING (article_id)
            WHERE ac.company = ? ORDER BY a.pub_date DESC""",
         (company,),
@@ -19,16 +19,39 @@ def _tags(row):
     return tags if isinstance(tags, list) else []
 
 
+def _stories(rows):
+    """Group copies of the same story (same title, different outlet), newest first.
+
+    Returns (row, copies) pairs, where row is the newest copy.
+    """
+    stories = {}
+    for row in rows:
+        key = " ".join((row["title"] or "").lower().split()) or row["article_id"]
+        if key in stories:
+            stories[key][1] += 1
+        else:
+            stories[key] = [row, 1]
+    return [tuple(s) for s in stories.values()]
+
+
 def summarize(conn, company, max_headlines=5):
-    """Plain-text summary of what the stored articles say about a company."""
-    rows = _articles(conn, company)
-    if not rows:
+    """Plain-text summary of what the stored articles say about a company.
+
+    Each story counts once, even if many outlets published it.
+    """
+    articles = _articles(conn, company)
+    if not articles:
         return f"No articles about {company} have been collected yet."
 
-    n = len(rows)
+    stories = _stories(articles)
+    rows = [row for row, _ in stories]
+
+    count = f"{len(stories)} {'story' if len(stories) == 1 else 'stories'}"
+    if len(articles) != len(stories):
+        count += f" ({len(articles)} articles including copies from other outlets)"
     lines = [
-        f"{company}: {n} article{'s' if n != 1 else ''} collected, "
-        f"from {rows[-1]['pub_date']} to {rows[0]['pub_date']} UTC."
+        f"{company}: {count} collected, "
+        f"from {articles[-1]['pub_date']} to {articles[0]['pub_date']} UTC."
     ]
 
     sentiment = Counter(r["sentiment"] for r in rows if r["sentiment"])
@@ -44,14 +67,11 @@ def summarize(conn, company, max_headlines=5):
         lines.append("Sources: " + ", ".join(s for s, _ in sources.most_common(3)) + ".")
 
     lines.append("Latest headlines:")
-    seen = set()
-    for r in rows:
-        if r["title"] in seen:
-            continue
-        seen.add(r["title"])
-        lines.append(f"  - {r['title']} ({r['source_name']}, {r['pub_date']}, {r['sentiment']})")
-        if len(seen) == max_headlines:
-            break
+    for row, copies in stories[:max_headlines]:
+        note = f", carried by {copies} outlets" if copies > 1 else ""
+        lines.append(
+            f"  - {row['title']} ({row['source_name']}, {row['pub_date']}, {row['sentiment']}{note})"
+        )
     return "\n".join(lines)
 
 

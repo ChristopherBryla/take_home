@@ -14,12 +14,22 @@ CREDITS_PER_DAY = 200
 POLL_SECONDS = 15 * 60
 
 # The API caps a search query at 100 characters, so the 11 companies are split
-# across two queries that both run on every 15-minute tick.
+# across several queries. Each tick makes 2 calls (96 ticks x 2 = 192 credits):
+# every query in EVERY_TICK_GROUPS runs each tick, and the second slot goes to
+# whichever ROTATING_GROUPS query was fetched longest ago.
+# Each request returns at most 10 articles shared by its whole group, so busy
+# companies get a query to themselves and the quiet ones share the rarer slot.
 MAX_QUERY_LENGTH = 100
-QUERY_GROUPS = [
-    ["Amazon", "Nvidia", "Alphabet", "Eli Lilly", "Berkshire Hathaway"],
-    ["Walmart", "ExxonMobil", "NextEra Energy", "Welltower", "Linde", "GE Aerospace"],
+EVERY_TICK_GROUPS = [
+    ["Amazon", "Alphabet"],
 ]
+ROTATING_GROUPS = [
+    ["Walmart", "Nvidia"],
+    ["Eli Lilly", "Berkshire Hathaway", "GE Aerospace"],
+    ["ExxonMobil", "NextEra Energy"],
+    ["Linde", "Welltower"],
+]
+QUERY_GROUPS = EVERY_TICK_GROUPS + ROTATING_GROUPS
 
 # name -> tickers. Alphabet has two share classes.
 COMPANIES = {

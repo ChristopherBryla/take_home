@@ -17,6 +17,8 @@ def main(argv=None, fetch=fetcher.fetch_articles):
     sub.add_parser("fetch", help="run one tick now: both queries, 2 credits")
     sub.add_parser("run", help="run a tick every 15 minutes")
     sub.add_parser("retag", help="re-scan every stored article for company mentions")
+    p_query = sub.add_parser("query", help="run a read-only SQL file, e.g. queries\\01_articles_per_company.sql")
+    p_query.add_argument("file")
     p_ask = sub.add_parser("ask", help="ask what the news has said about a company")
     p_ask.add_argument("question")
     args = parser.parse_args(argv)
@@ -41,8 +43,21 @@ def main(argv=None, fetch=fetcher.fetch_articles):
             print("Stopped.")
     elif args.command == "retag":
         print(f"{db.tag_articles(conn)} article-company links.")
+    elif args.command == "query":
+        conn.execute("PRAGMA query_only = ON")
+        with open(args.file, encoding="utf-8") as f:
+            print_table(conn.execute(f.read()))
     elif args.command == "ask":
         print(answer(conn, args.question))
+
+
+def print_table(cursor, max_width=70):
+    headers = [d[0] for d in cursor.description]
+    rows = [["" if v is None else str(v)[:max_width] for v in row] for row in cursor.fetchall()]
+    widths = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
+    for line in [headers, ["-" * w for w in widths], *rows]:
+        print("  ".join(cell.ljust(w) for cell, w in zip(line, widths)).rstrip())
+    print(f"({len(rows)} rows)")
 
 
 def stamp():
