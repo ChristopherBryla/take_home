@@ -22,6 +22,8 @@ def build_query(companies):
     terms = [f'"{n}"' if " " in n else n for n in names]
     for company in companies:
         for ticker in config.COMPANIES[company]:
+            if ticker in config.SEARCH_SKIP_TICKERS:
+                continue
             if len(" OR ".join(terms + [ticker])) <= config.MAX_QUERY_LENGTH:
                 terms.append(ticker)
     return " OR ".join(terms)

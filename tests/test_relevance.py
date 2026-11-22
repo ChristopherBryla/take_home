@@ -47,5 +47,18 @@ def test_google_news_boilerplate_does_not_count_as_alphabet():
     assert mentions_company(article(description=boilerplate + ". Google also said"), "Alphabet")
 
 
+def test_racing_driver_van_der_linde_is_not_the_company():
+    driver = "Sheldon van der Linde survives 250km/h wall strike to win chaotic FIA GT World Cup"
+
+    assert not mentions_company(article(driver), "Linde")
+    assert mentions_company(article("Linde (NASDAQ:LIN) Upgraded at Kepler Capital Markets"), "Linde")
+    assert mentions_company(article("Linde raises its outlook; van der Linde wins in Macau"), "Linde")
+
+
+def test_stock_tickers_still_match_in_our_own_check():
+    assert mentions_company(article("GSI Capital Buys Shares of Welltower Inc. $WELL"), "Welltower")
+    assert mentions_company(article("Linde (NASDAQ:LIN) Upgraded"), "Linde")
+
+
 def test_missing_text_does_not_crash():
     assert not mentions_company({"title": None, "description": None}, "Amazon")

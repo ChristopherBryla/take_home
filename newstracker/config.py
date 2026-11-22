@@ -61,4 +61,9 @@ ALIASES = {
 
 # Boilerplate that contains a company name without being about the company
 # (e.g. "See more headlines & perspectives on Google News").
-IGNORED_PHRASES = ["Google News"]
+IGNORED_PHRASES = ["Google News", "van der Linde"]
+
+# Tickers that are also ordinary words. The search isn't case-sensitive, so sending
+# them returns unrelated articles; they are still matched (uppercase only) in our own
+# relevance check.
+SEARCH_SKIP_TICKERS = ["GE", "LIN", "WELL"]

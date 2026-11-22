@@ -36,6 +36,11 @@ def test_query_drops_names_that_a_shorter_alias_already_covers():
     assert fetcher.build_query(["NextEra Energy"]) == "NextEra OR NEE"
 
 
+def test_query_leaves_out_tickers_that_are_ordinary_words():
+    assert fetcher.build_query(["Linde", "Welltower"]) == "Linde OR Welltower"
+    assert fetcher.build_query(["GE Aerospace"]) == '"GE Aerospace"'
+
+
 def test_query_keeps_exxonmobil_next_to_exxon():
     # Search matches whole words, so "Exxon" alone would miss "ExxonMobil".
     assert fetcher.build_query(["ExxonMobil"]) == "ExxonMobil OR Exxon OR XOM"
