@@ -43,3 +43,7 @@ ALIASES = {
     "Eli Lilly": ["Lilly"],
     "NextEra Energy": ["NextEra"],
 }
+
+# Boilerplate that contains a company name without being about the company
+# (e.g. "See more headlines & perspectives on Google News").
+IGNORED_PHRASES = ["Google News"]

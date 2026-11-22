@@ -40,5 +40,12 @@ def test_aliases_match_their_company():
     assert not mentions_company(article("Google unveils a new chip"), "Amazon")
 
 
+def test_google_news_boilerplate_does_not_count_as_alphabet():
+    boilerplate = "Canada joins NATO investment fund Quinte NewsSee more headlines & perspectives on Google News"
+
+    assert not mentions_company(article(description=boilerplate), "Alphabet")
+    assert mentions_company(article(description=boilerplate + ". Google also said"), "Alphabet")
+
+
 def test_missing_text_does_not_crash():
     assert not mentions_company({"title": None, "description": None}, "Amazon")

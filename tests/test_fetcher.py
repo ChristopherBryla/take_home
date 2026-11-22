@@ -59,6 +59,32 @@ def test_daily_limit_stops_fetching(conn):
     assert fetcher.run_once(conn, empty_fetch, daily_limit=1) == []
 
 
+def test_fetch_articles_sends_the_query_and_hides_the_key_in_errors(monkeypatch):
+    sent = {}
+
+    class FakeResponse:
+        def __init__(self, status_code, body):
+            self.status_code, self._body = status_code, body
+
+        def json(self):
+            return self._body
+
+    def fake_get(url, params, timeout):
+        sent.update(params)
+        return FakeResponse(200, {"status": "success", "totalResults": 0, "results": []})
+
+    monkeypatch.setattr(config, "NEWSDATA_API_KEY", "secret-key")
+    monkeypatch.setattr(fetcher.requests, "get", fake_get)
+
+    assert fetcher.fetch_articles("Amazon OR AMZN")["status"] == "success"
+    assert sent["q"] == "Amazon OR AMZN"
+
+    monkeypatch.setattr(fetcher.requests, "get", lambda *a, **k: FakeResponse(401, {}))
+    with pytest.raises(fetcher.FetchError) as error:
+        fetcher.fetch_articles("Amazon OR AMZN")
+    assert "secret-key" not in str(error.value)
+
+
 def test_failed_request_is_logged_and_counts_as_a_credit(conn):
     def failing(query):
         raise fetcher.FetchError("HTTP 429")

@@ -1,6 +1,6 @@
 import re
 
-from newstracker.config import ALIASES, COMPANIES
+from newstracker.config import ALIASES, COMPANIES, IGNORED_PHRASES
 
 
 def mentions_company(article, company):
@@ -8,8 +8,11 @@ def mentions_company(article, company):
 
     Names match case-insensitively. Tickers must be uppercase, so words like
     "well", "ge" and "lin" don't count as Welltower, GE Aerospace or Linde.
+    Phrases in IGNORED_PHRASES are removed before matching.
     """
     text = f"{article.get('title') or ''} {article.get('description') or ''}"
+    for phrase in IGNORED_PHRASES:
+        text = re.sub(re.escape(phrase), " ", text, flags=re.IGNORECASE)
 
     for name in [company, *ALIASES.get(company, [])]:
         if re.search(rf"\b{re.escape(name)}\b", text, re.IGNORECASE):

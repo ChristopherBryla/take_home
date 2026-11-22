@@ -33,11 +33,7 @@ def fetch_articles(query):
         raise FetchError("NEWSDATA_API_KEY is not set")
     response = requests.get(
         config.NEWSDATA_URL,
-        params={
-            "apikey": config.NEWSDATA_API_KEY,
-            "q": build_query(company),
-            "language": "en",
-        },
+        params={"apikey": config.NEWSDATA_API_KEY, "q": query, "language": "en"},
         timeout=30,
     )
     # Not raise_for_status(): its message contains the URL, which contains the key.
