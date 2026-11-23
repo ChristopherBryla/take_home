@@ -79,23 +79,11 @@ def credits_used_today(conn):
     return row[0]
 
 
-def next_rotating_group(conn):
-    """The rotating group whose query was fetched longest ago (never-fetched first).
-
-    Ordered by log row id, not time, so calls within the same second can't tie.
-    """
-    last = {
-        r["query"]: r["last"]
-        for r in conn.execute("SELECT query, MAX(id) AS last FROM fetch_log GROUP BY query")
-    }
-    return min(config.ROTATING_GROUPS, key=lambda g: last.get(build_query(g), 0))
-
-
 def run_once(conn, fetch=fetch_articles, daily_limit=None):
-    """One 15-minute tick: the every-tick queries plus the next rotating one."""
+    """One 15-minute tick: run every query group, stopping at the daily budget."""
     daily_limit = daily_limit or config.CREDITS_PER_DAY
     results = []
-    for group in [*config.EVERY_TICK_GROUPS, next_rotating_group(conn)]:
+    for group in config.QUERY_GROUPS:
         if credits_used_today(conn) >= daily_limit:
             break
         query = build_query(group)

@@ -26,7 +26,7 @@ def test_whole_flow(tmp_path, capsys):
 
     # 1. One tick: the API response is fetched and stored.
     main(["--db", path, "fetch"], fetch=fake_api)
-    assert len(queries) == 2  # the every-tick query plus one rotating query
+    assert len(queries) == 2  # both query groups run on every tick
     assert all(len(q) <= 100 for q in queries)  # NewsData.io's query limit
 
     conn = db.connect(path)
