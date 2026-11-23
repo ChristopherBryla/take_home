@@ -14,17 +14,25 @@ pip install -r requirements.txt
 copy .env.example .env      # then put your NewsData.io key in .env
 ```
 
+Then run [app.py](app.py) (press Run in VS Code, or `python app.py`). It fetches right away and then every 15 minutes until you stop it with Ctrl+C.
+
+Then, while it runs or after:
+
+- **Ask questions:** run [ask.py](ask.py) and type something like `What has the news said about AMZN?`.
+- **Explore the database:** run [query.py](query.py), pick a number from the SQL files in `queries/` or type your own SQL (read-only).
+
+Both can also be run from a terminal, along with a few extras:
+
 ```powershell
-python -m newstracker fetch                                   # one tick now (2 credits)
-python -m newstracker run                                     # a tick every 15 minutes
 python -m newstracker ask "What has the news said about AMZN?"
 python -m newstracker ask --llm "Did Amazon announce layoffs?"   # optional: answer with OpenAI
 python -m newstracker query queries\01_articles_per_company.sql  # run a read-only SQL file
-python -m newstracker retag                                   # rebuild company tags from stored articles
-python -m pytest                                              # tests (no API calls, no credits)
+python -m newstracker fetch                                      # one tick now (2 credits)
+python -m newstracker retag                                      # rebuild company tags from stored articles
+python -m pytest -s                                              # one end-to-end test, no API calls, no credits
 ```
 
-Data is stored in `news.db` (override with `--db path`). It is git-ignored, so a fresh clone starts empty: run `fetch` or `run` to collect data. `queries/` holds a few basic SQL queries for exploring it.
+Data is stored in `news.db` next to `app.py`. It is git-ignored, so a fresh clone starts empty until `app.py` has run. `queries/` holds a few basic SQL queries for exploring it. The test (`tests/test_flow.py`) feeds the saved response in `sample_data/sample_response.json` through the whole flow: fetch, store, tag, answer.
 
 ## How it works
 
@@ -44,7 +52,7 @@ Tables: `articles`, `article_companies` (article-to-company links), `fetch_log` 
 - **Same story, many outlets.** One story is often syndicated by many outlets with different `article_id`s. The summary groups articles with the same title and counts each story once, and shows how many copies there were.
 - **Sentiment comes from the API.** The free plan includes a sentiment label and scores, so no separate model is used. The summary tallies the labels. I did not look into how NewsData.io computes them, a few articles have no label, and the label describes an article's tone, not necessarily whether it is good or bad news for the company.
 - **Summary is rule-based by default.** The free plan hides article `content` (and `ai_summary`), leaving only titles and descriptions, so the default summary is a roll-up of those fields rather than a model-written paragraph. Fields locked on the free plan are stored as NULL.
-- **Language model is optional (`ask --llm`).** The rule-based answer only identifies the company in a question, so it cannot answer things like "Did Amazon announce layoffs?". With `--llm` and an `OPENAI_API_KEY` in `.env`, the stored stories (title, description, date, source, sentiment; one entry per distinct story, newest 40 per company) are sent to OpenAI's `gpt-6-luna` model with instructions to answer only from them and to say when the data doesn't cover the question. It is opt-in because it costs money and sends article text to a third party. If the key is missing or the call fails, the rule-based summary is printed instead. The tests use a fake HTTP client, so the live call is untested until a key is added.
+- **Language model is optional (`ask --llm`).** The rule-based answer only identifies the company in a question, so it cannot answer things like "Did Amazon announce layoffs?". With `--llm` and an `OPENAI_API_KEY` in `.env`, the stored stories (title, description, date, source, sentiment; one entry per distinct story, newest 40 per company) are sent to OpenAI's `gpt-6-luna` model with instructions to answer only from them and to say when the data doesn't cover the question. It is opt-in because it costs money and sends article text to a third party. If the key is missing or the call fails, the rule-based summary is printed instead. This path has no automated test and has not been run against the real API.
 - **SQLite.** One file, no setup, enough for this volume.
 
 ## Steps followed
@@ -52,9 +60,9 @@ Tables: `articles`, `article_companies` (article-to-company links), `fetch_log` 
 1. Read the brief and checked the free-plan limits (200 credits/day, 10 articles per request, 12-hour delay, 100-character queries, no full content).
 2. Set up the environment and repo, then the config (company list).
 3. Made one real API call (Amazon) and inspected the response: sentiment is included, `content` is locked, and a loose query returns many shopping-deal articles.
-4. Designed the schema and tested it against that saved real response (`sample_data/real_amzn.json`).
+4. Designed the schema and tested it against that saved real response (`sample_data/sample_response.json`).
 5. Added the relevance filter and aliases after seeing what the real data looked like.
-6. Built the fetcher, summary and CLI, with a flow test driven by the saved response.
+6. Built the fetcher, summary and CLI, with one end-to-end test driven by the saved response.
 7. Changed the fetching approach to combined queries plus whole-database tagging, instead of one request per company.
 8. Ran the first version live for about an hour (12 calls, no failures). It showed false matches ("Google News" boilerplate), the same story counted many times, and busy companies crowding out quiet ones; five of the 11 companies had no articles at all.
 9. Fixed those: ignored the boilerplate, grouped copies of a story by title in the summary, and replaced the two fixed queries with the every-tick plus rotating layout.

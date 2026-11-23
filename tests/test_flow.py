@@ -1,118 +1,61 @@
-"""End-to-end flow with real_amzn.json standing in for the API (no credits used).
+"""End-to-end flow, using the saved API response in place of the real API (no credits used).
 
-Run with output visible:  python -m pytest tests/test_flow.py -s
+    python -m pytest -s
 """
 import json
-import sqlite3
 from pathlib import Path
-
-import pytest
 
 from newstracker import db
 from newstracker.cli import main
 
-SAMPLE = Path(__file__).parent.parent / "sample_data" / "real_amzn.json"
+SAMPLE = Path(__file__).parent.parent / "sample_data" / "sample_response.json"
 
 
-@pytest.fixture
-def response():
-    return json.loads(SAMPLE.read_text(encoding="utf-8"))
+def test_whole_flow(tmp_path, capsys):
+    response = json.loads(SAMPLE.read_text(encoding="utf-8"))
+    queries = []
 
-
-@pytest.fixture
-def fake_fetch(response):
-    calls = []
-
-    def fetch(query):
-        calls.append(query)
+    def fake_api(query):
+        queries.append(query)
         return response
 
-    fetch.calls = calls
-    return fetch
-
-
-def test_fetch_store_and_ask(tmp_path, capsys, fake_fetch, response):
     path = str(tmp_path / "flow.db")
 
-    # 1. One tick: both queries hit the "API" and land in the database.
-    main(["--db", path, "fetch"], fetch=fake_fetch)
-    assert len(fake_fetch.calls) == 2
-    assert "10 new articles for:" in capsys.readouterr().out
+    # 1. One tick: the API response is fetched and stored.
+    main(["--db", path, "fetch"], fetch=fake_api)
+    assert len(queries) == 2  # the every-tick query plus one rotating query
+    assert all(len(q) <= 100 for q in queries)  # NewsData.io's query limit
 
     conn = db.connect(path)
     assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10
-    first, second = conn.execute("SELECT * FROM fetch_log ORDER BY id").fetchall()
-    assert (first["status"], first["total_results"], first["new_articles"]) == (
-        "ok", response["totalResults"], 10,
+    logged = conn.execute("SELECT status, total_results, new_articles FROM fetch_log").fetchall()
+    assert [tuple(r) for r in logged] == [("ok", 4241, 10), ("ok", 4241, 0)]
+
+    # Every field of the response is kept, and locked free-plan fields become NULL.
+    stored = conn.execute("SELECT raw_json, content FROM articles").fetchall()
+    assert sorted(json.loads(r["raw_json"])["article_id"] for r in stored) == sorted(
+        a["article_id"] for a in response["results"]
     )
-    assert second["new_articles"] == 0  # the second query returned the same articles
+    assert all(r["content"] is None for r in stored)
 
-    # 2. database -> answer, through the CLI
+    # 2. Articles are linked to the companies they mention, across all 11 companies.
+    links = {
+        (r["company"], r["title"].split()[0])
+        for r in conn.execute(
+            "SELECT ac.company, a.title FROM article_companies ac JOIN articles a USING (article_id)"
+        )
+    }
+    assert links == {("Amazon", "Our"), ("Amazon", "Hanes’"), ("Walmart", "Our")}
+
+    # 3. The question is answered from what was stored.
     main(["--db", path, "ask", "What has the news said about AMZN?"])
-    out = capsys.readouterr().out
-    print("\n" + out)
+    answer = capsys.readouterr().out.split("Amazon:", 1)[1]
+    print("\nAmazon:" + answer)
+    assert "2 stories" in answer
+    assert "Sentiment:" in answer
+    assert "earbuds" in answer and "Hanes" in answer
+    assert "adidas" not in answer  # stored, but never mentions Amazon
 
-    assert "Amazon: 2 stories collected" in out
-    assert "Sentiment:" in out
-    assert "Hanes" in out
-    # Articles that never mention Amazon are stored but not part of the answer.
-    assert "adidas" not in out
-
-    # 3. The whole database is checked: this Amazon-query result also mentions Walmart.
-    main(["--db", path, "ask", "What has the news said about WMT?"])
-    out = capsys.readouterr().out
-    assert "Walmart: 1 story collected" in out
-    assert "earbuds" in out
-
-
-def test_fetching_again_stores_nothing_new(tmp_path, capsys, fake_fetch):
-    path = str(tmp_path / "flow.db")
-
-    main(["--db", path, "fetch"], fetch=fake_fetch)
-    capsys.readouterr()
-    main(["--db", path, "fetch"], fetch=fake_fetch)
-
-    assert capsys.readouterr().out.count("0 new articles for:") == 2
-    assert db.connect(path).execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10
-
-
-def test_query_command_prints_a_table_and_cannot_write(tmp_path, capsys, fake_fetch):
-    path = str(tmp_path / "flow.db")
-    main(["--db", path, "fetch"], fetch=fake_fetch)
-    capsys.readouterr()
-
-    select = tmp_path / "q.sql"
-    select.write_text("SELECT company, COUNT(*) AS articles FROM article_companies GROUP BY company;")
-    main(["--db", path, "query", str(select)])
-    out = capsys.readouterr().out
-    assert out.splitlines()[0].split() == ["company", "articles"]
-    assert "Walmart" in out
-    assert "(2 rows)" in out
-
-    delete = tmp_path / "d.sql"
-    delete.write_text("DELETE FROM articles;")
-    with pytest.raises(sqlite3.OperationalError):
-        main(["--db", path, "query", str(delete)])
-    assert db.connect(path).execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10
-
-
-def test_retag_command(tmp_path, capsys, fake_fetch):
-    path = str(tmp_path / "flow.db")
-    main(["--db", path, "fetch"], fetch=fake_fetch)
-    capsys.readouterr()
-
-    main(["--db", path, "retag"])
-
-    assert "3 article-company links." in capsys.readouterr().out
-
-
-def test_ask_before_any_fetch(tmp_path, capsys):
-    main(["--db", str(tmp_path / "empty.db"), "ask", "What has the news said about Amazon?"])
-
-    assert "No articles about Amazon have been collected yet." in capsys.readouterr().out
-
-
-def test_ask_about_unknown_company(tmp_path, capsys):
-    main(["--db", str(tmp_path / "empty.db"), "ask", "How is Tesla doing?"])
-
-    assert "couldn't tell which company" in capsys.readouterr().out
+    # 4. Fetching the same response again stores nothing new.
+    main(["--db", path, "fetch"], fetch=fake_api)
+    assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -12,7 +13,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_MODEL = "gpt-6-luna"
 
-DB_PATH = "news.db"
+DB_PATH = str(Path(__file__).resolve().parent.parent / "news.db")
 
 # Free plan: 200 credits/day, 1 credit per request. 96 runs/day x 2 queries = 192.
 CREDITS_PER_DAY = 200
