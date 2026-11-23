@@ -1,9 +1,12 @@
 """End-to-end flow, using the saved API response in place of the real API (no credits used).
 
-    python -m pytest -s
+Press Run on this file, or:  python -m pytest -s
 """
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))  # lets the Run button find newstracker
 
 from newstracker import db
 from newstracker.cli import main
@@ -59,3 +62,9 @@ def test_whole_flow(tmp_path, capsys):
     # 4. Fetching the same response again stores nothing new.
     main(["--db", path, "fetch"], fetch=fake_api)
     assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 10
+
+
+if __name__ == "__main__":
+    import pytest
+
+    sys.exit(pytest.main([__file__, "-s", "-q"]))
