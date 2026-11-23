@@ -35,7 +35,6 @@ ROTATING_GROUPS = [
     ["ExxonMobil", "NextEra Energy"],
     ["Linde", "Welltower"],
 ]
-QUERY_GROUPS = EVERY_TICK_GROUPS + ROTATING_GROUPS
 
 # name -> tickers. Alphabet has two share classes.
 COMPANIES = {

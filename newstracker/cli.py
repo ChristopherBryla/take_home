@@ -66,7 +66,7 @@ def main(argv=None, fetch=fetcher.fetch_articles):
 def print_table(cursor, max_width=70):
     headers = [d[0] for d in cursor.description]
     rows = [["" if v is None else str(v)[:max_width] for v in row] for row in cursor.fetchall()]
-    widths = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(headers)]
+    widths = [max([len(h), *(len(r[i]) for r in rows)]) for i, h in enumerate(headers)]
     for line in [headers, ["-" * w for w in widths], *rows]:
         print("  ".join(cell.ljust(w) for cell, w in zip(line, widths)).rstrip())
     print(f"({len(rows)} rows)")
