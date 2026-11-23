@@ -18,7 +18,7 @@ Then run [app.py](app.py) (press Run in VS Code, or `python app.py`). It fetches
 
 Then, while it runs or after:
 
-- **Ask questions:** run [ask.py](ask.py) and type something like `What has the news said about AMZN?`.
+- **Ask questions:** run [ask.py](ask.py) and type something like `What has the news said about AMZN?`. Type `/llm` to switch to the optional OpenAI answer (and `/llm` again to switch back).
 - **Explore the database:** run [query.py](query.py), pick a number from the SQL files in `queries/` or type your own SQL (read-only).
 
 Both can also be run from a terminal, along with a few extras:
@@ -52,7 +52,7 @@ Tables: `articles`, `article_companies` (article-to-company links), `fetch_log` 
 - **Same story, many outlets.** One story is often syndicated by many outlets with different `article_id`s. The summary groups articles with the same title and counts each story once, and shows how many copies there were.
 - **Sentiment comes from the API.** The free plan includes a sentiment label and scores, so no separate model is used. The summary tallies the labels. I did not look into how NewsData.io computes them, a few articles have no label, and the label describes an article's tone, not necessarily whether it is good or bad news for the company.
 - **Summary is rule-based by default.** The free plan hides article `content` (and `ai_summary`), leaving only titles and descriptions, so the default summary is a roll-up of those fields rather than a model-written paragraph. Fields locked on the free plan are stored as NULL.
-- **Language model is optional (`ask --llm`).** The rule-based answer only identifies the company in a question, so it cannot answer things like "Did Amazon announce layoffs?". With `--llm` and an `OPENAI_API_KEY` in `.env`, the stored stories (title, description, date, source, sentiment; one entry per distinct story, newest 40 per company) are sent to OpenAI's `gpt-6-luna` model with instructions to answer only from them and to say when the data doesn't cover the question. It is opt-in because it costs money and sends article text to a third party. If the key is missing or the call fails, the rule-based summary is printed instead. This path has no automated test and has not been run against the real API.
+- **Language model is optional (`ask --llm`).** The rule-based answer only identifies the company in a question, so it cannot answer things like "Did Amazon announce layoffs?". With `--llm` and an `OPENAI_API_KEY` in `.env`, the stored stories (title, description, date, source, sentiment; one entry per distinct story, newest 40 per company) are sent to OpenAI's `gpt-5.4-mini` model (override with `OPENAI_MODEL` in `.env`) with instructions to answer only from them and to say when the data doesn't cover the question. It is opt-in because it costs money and sends article text to a third party. If the key is missing or the call fails, the rule-based summary is printed instead. It has no automated test; I checked it by hand against the real API.
 - **SQLite.** One file, no setup, enough for this volume.
 
 ## Steps followed

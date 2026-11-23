@@ -11,7 +11,7 @@ NEWSDATA_URL = "https://newsdata.io/api/1/latest"
 # Optional: only used by `ask --llm`.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
-OPENAI_MODEL = "gpt-6-luna"
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
 
 DB_PATH = str(Path(__file__).resolve().parent.parent / "news.db")
 
